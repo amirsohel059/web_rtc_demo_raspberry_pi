@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Pi → WebRTC (video + audio)</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;padding:16px}
+    video{width:640px;height:480px;background:#000;display:block;margin-top:8px}
+    #log{white-space:pre-wrap;font-size:12px;color:#555;margin-top:8px}
+    label{display:inline-block;width:48px}
+  </style>
+</head>
+<body>
+  <h2>Raspberry Pi → WebRTC (video + audio)</h2>
+  <div>
+    <label>W</label><input id="w" type="number" value="640">
+    <label>H</label><input id="h" type="number" value="480">
+    <label>FPS</label><input id="fps" type="number" value="20">
+    <button id="start">Start</button>
+  </div>
+  <div id="log">Idle</div>
+  <video id="v" autoplay playsinline muted></video>
+  <audio id="a" autoplay></audio>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const log = s => { logEl.textContent = s + "\n" + logEl.textContent; console.log(s); };
+
+    async function start() {
+      const v = document.getElementById('v');
+      const a = document.getElementById('a');
+      const w = document.getElementById('w').value || 640;
+      const h = document.getElementById('h').value || 480;
+      const fps = document.getElementById('fps').value || 20;
+
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: ['stun:stun.l.google.com:19302'] }
+          // add TURN here later if needed
+        ]
+      });
+
+      pc.oniceconnectionstatechange = () => log('ICE: '+pc.iceConnectionState);
+      pc.onconnectionstatechange = () => log('PC: '+pc.connectionState);
+      pc.ontrack = (ev) => {
+        if (ev.track.kind === 'video') { v.srcObject = ev.streams[0]; log('Video track received'); }
+        if (ev.track.kind === 'audio') { a.srcObject = ev.streams[0]; log('Audio track received'); }
+      };
+
+      pc.addTransceiver('video', {direction: 'recvonly'});
+      pc.addTransceiver('audio', {direction: 'recvonly'});
+
+      log('Creating offer…');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      log('Sending offer…');
+      const resp = await fetch(`/offer?w=${w}&h=${h}&fps=${fps}`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ sdp: offer.sdp, type: offer.type })
+      });
+      const ans = await resp.json();
+      log('Setting answer…');
+      await pc.setRemoteDescription(new RTCSessionDescription(ans));
+      log('Streaming…');
+    }
+    document.getElementById('start').onclick = start;
+  </script>
+</body>
+</html>

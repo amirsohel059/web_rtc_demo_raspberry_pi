@@ -1,0 +1,6 @@
+ultralytics>=8.3.0
+opencv-python-headless>=4.8
+aiortc>=1.7
+aiohttp>=3.9
+av>=12.1
+sounddevice>=0.4
